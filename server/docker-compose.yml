@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  privacy-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/privacy_vault.db
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}  # Set in .env for production
+    volumes:
+      - ./data:/app/data  # Persist database
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Optional: Redis for caching (production)
+  # redis:
+  #   image: redis:alpine
+  #   ports:
+  #     - "6379:6379"
+
+volumes:
+  data:
