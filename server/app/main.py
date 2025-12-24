@@ -29,6 +29,8 @@ from fastapi import FastAPI, File, UploadFile, Form, Depends, HTTPException, Que
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+import cv2 
+from fastapi.responses import StreamingResponse
 
 # Local imports
 from app.database import (
@@ -202,6 +204,25 @@ async def enroll_user(
             detail={"error_code": ErrorCode.PROCESSING_ERROR, "message": str(e)}
         )
 
+# Initialize camera globally (or inside a dependency)
+camera = cv2.VideoCapture(0)
+
+def generate_frames():
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        else:
+            # Here you would insert your blurring/detection logic
+            # For now, we'll just stream the raw frame
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.get("/video_feed")
+async def video_feed():
+    return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 @app.post("/sync-known-faces", tags=["Enrollment"])
 async def sync_known_faces(db: Session = Depends(get_db)):
