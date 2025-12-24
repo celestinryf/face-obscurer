@@ -18,6 +18,8 @@ Press 'q' to quit.
 """
 from __future__ import annotations
 
+import FreeSimpleGUI as sg
+
 import argparse
 import sys
 from pathlib import Path
@@ -27,6 +29,9 @@ import face_recognition
 import numpy as np
 from ultralytics import YOLO
 
+# Setup SG theme
+sg.theme('DarkBlack')
+
 # Register HEIF/HEIC opener for PIL
 try:
     import pillow_heif
@@ -34,6 +39,11 @@ try:
 except ImportError:
     pass  # pillow-heif not installed, HEIC support will fail gracefully
 
+def create_loading_window() -> sg.Window:
+    layout = [
+        [sg.Text("Loading camera scanner...", key='LoadingText', font=("Lucida Console", 14))],
+    ]
+    return sg.Window("Loading...", layout, finalize=True)
 
 def parse_args() -> argparse.Namespace:
     # Default to known_faces folder relative to this script
@@ -50,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def load_known_faces(known_faces_dir: str) -> tuple[list[np.ndarray], list[str]]:
+def load_known_faces(known_faces_dir: str, loading_window: sg.Window) -> tuple[list[np.ndarray], list[str]]:
     """Load known face encodings from directory.
     
     Expected structure:
@@ -76,7 +86,10 @@ def load_known_faces(known_faces_dir: str) -> tuple[list[np.ndarray], list[str]]
         return known_encodings, known_names
 
     # Support HEIC (Apple), JPG, and PNG formats
-    image_files = (
+    image_files = sorted(known_dir.glob("*.png"))
+    '''  
+        With current implementation, all images are .png. To add more formats, uncomment below:
+        (
         sorted(known_dir.glob("*.heic"))
         + sorted(known_dir.glob("*.HEIC"))
         + sorted(known_dir.glob("*.jpg"))
@@ -85,7 +98,8 @@ def load_known_faces(known_faces_dir: str) -> tuple[list[np.ndarray], list[str]]
         + sorted(known_dir.glob("*.JPEG"))
         + sorted(known_dir.glob("*.png"))
         + sorted(known_dir.glob("*.PNG"))
-    )
+        )
+    '''
     for image_path in image_files:
         try:
             # Extract label from filename (without extension)
@@ -96,17 +110,30 @@ def load_known_faces(known_faces_dir: str) -> tuple[list[np.ndarray], list[str]]
             if encodings:
                 known_encodings.append(encodings[0])
                 known_names.append(person_name)
+                loading_window['LoadingText'].update(f"Loaded {image_path.name} -> {person_name}")
+                loading_window.refresh()
                 print(f"  Loaded {image_path.name} -> {person_name}", file=sys.stderr)
             else:
+                loading_window['LoadingText'].update(f"WARNING: No face found in {image_path.name}")
+                loading_window.refresh()
                 print(f"  WARNING: No face found in {image_path.name}", file=sys.stderr)
         except Exception as e:
+            loading_window['LoadingText'].update(f"ERROR loading {image_path.name}: {e}")
+            loading_window.refresh()
             print(f"  ERROR loading {image_path.name}: {e}", file=sys.stderr)
 
+    loading_window['LoadingText'].update(f"Loaded {len(known_encodings)} face encodings for {len(set(known_names))} people")
+    loading_window.refresh()
     print(f"Loaded {len(known_encodings)} face encodings for {len(set(known_names))} people", file=sys.stderr)
     return known_encodings, known_names
 
 
 def main() -> int:
+
+    loading_window = create_loading_window()
+
+    event, values = loading_window.read(timeout=100)
+
     args = parse_args()
 
     cap = cv2.VideoCapture(args.device)
@@ -119,9 +146,11 @@ def main() -> int:
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
 
     # Load known faces
-    known_encodings, known_names = load_known_faces(args.known_faces_dir)
+    known_encodings, known_names = load_known_faces(args.known_faces_dir, loading_window)
 
     # Load YOLO model
+    loading_window['LoadingText'].update("Loading YOLOv8 model (this may take a moment)...")
+    loading_window.refresh()
     print("Loading YOLOv8 model (this may take a moment)...", file=sys.stderr)
     try:
         model = YOLO("yolov8n.pt")  # nano model for speed; use yolov8s.pt, yolov8m.pt for better accuracy
@@ -132,6 +161,9 @@ def main() -> int:
 
     window_name = "Face & Object Scanner - press 'q' to quit"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+    loading_window['LoadingText'].update("Enjoy!")
+    loading_window.refresh()
 
     unknown_person_counter = 0  # Counter for unknown faces in current frame
 
@@ -234,6 +266,7 @@ def main() -> int:
                         1,
                     )
 
+            
             cv2.imshow(window_name, frame)
 
             key = cv2.waitKey(1) & 0xFF
