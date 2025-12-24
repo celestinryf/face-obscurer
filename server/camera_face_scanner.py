@@ -147,7 +147,7 @@ def main() -> int:
             rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
             # Detect faces in current frame
-            face_locations = face_recognition.face_locations(rgb_small_frame, model="hog")
+            face_locations = face_recognition.face_locations(rgb_small_frame, model="cnn")
             face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
             # Run YOLO detection on full frame
@@ -174,28 +174,34 @@ def main() -> int:
 
                 frame_labels[idx] = label
 
-            # Draw rectangles for faces with labels
-            for idx, (top, right, bottom, left) in enumerate(face_locations):
-                # Scale back up (we detected on 0.25 scale)
-                top *= 4
-                right *= 4
-                bottom *= 4
-                left *= 4
+                # Draw rectangles for faces with labels
+                for idx, (top, right, bottom, left) in enumerate(face_locations):
+                    # Scale back up (we detected on 0.25 scale)
+                    top *= 4
+                    right *= 4
+                    bottom *= 4
+                    left *= 4
 
-                label = frame_labels.get(idx, "Unknown")
-                color = (0, 255, 0) if label != "Unknown" else (0, 0, 255)  # Green for known, red for unknown
-
-                cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
-                cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
-                cv2.putText(
-                    frame,
-                    label,
-                    (left + 6, bottom - 6),
-                    cv2.FONT_HERSHEY_DUPLEX,
-                    0.6,
-                    (255, 255, 255),
-                    1,
-                )
+                    label = frame_labels.get(idx, "Unknown")
+                    
+                    # PRIVACY LOGIC: If the face is "Known" (one of your opt-out users), black it out
+                    if label != "Unknown" and not label.startswith("Person "):
+                        # Draw a solid black box over the face
+                        cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 0), -1)
+                    else:
+                        # Normal diagnostic box for unknown people
+                        color = (0, 0, 255) # Red
+                        cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+                        cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
+                        cv2.putText(
+                            frame,
+                            label,
+                            (left + 6, bottom - 6),
+                            cv2.FONT_HERSHEY_DUPLEX,
+                            0.6,
+                            (255, 255, 255),
+                            1,
+                        )
 
             # Draw YOLO detections
             for result in results:

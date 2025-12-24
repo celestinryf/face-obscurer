@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 
 class CensorMethodEnum(str, Enum):
@@ -188,7 +189,7 @@ class StatsResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Standard error response."""
-    status: str = Field("error", const=True)
+    status: Literal["error"] = "error"
     error_code: str
     message: str
     details: Optional[dict] = None
