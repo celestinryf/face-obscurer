@@ -1,178 +1,169 @@
-# 🔒 Privacy Engine - Right to be Forgotten
+# 🔒 Privacy Engine - Local Version (dlib)
 
-A hackathon-ready face recognition privacy system that allows users to automatically opt-out of appearing in photos. Built with FastAPI, this addresses real-world privacy concerns like GDPR and CCPA compliance.
+Face recognition privacy system using **dlib** - fully compatible with Person 1's camera scanner.
 
-## 🎯 Project Overview
+## ✅ Compatibility
 
-This is **Person 2's** contribution - the Backend & Database layer that:
-- Stores encrypted face encodings (never actual photos)
-- Orchestrates face comparison logic
-- Applies censorship to matched faces
-- Provides REST API for the frontend
+| Component | Encoding | Compatible? |
+|-----------|----------|-------------|
+| This API | 128-dim dlib | ✅ |
+| Camera Scanner | 128-dim dlib | ✅ |
+| Known Faces folder | Shared | ✅ |
 
-## 🏗️ Architecture
+Faces enrolled via the API will be recognized by the camera scanner and vice versa!
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (Person 3)                      │
-│                    React/Tailwind Dashboard                      │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │ HTTP/REST
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Backend API (Person 2)                        │
-│                         FastAPI Server                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   /enroll   │  │  /process   │  │     /users/*            │  │
-│  └──────┬──────┘  └──────┬──────┘  └─────────────────────────┘  │
-│         │                │                                       │
-│         ▼                ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │              Face Comparison Engine                          ││
-│  │         (Euclidean Distance < 0.6 = Match)                   ││
-│  └─────────────────────────────────────────────────────────────┘│
-│         │                │                                       │
-│         ▼                ▼                                       │
-│  ┌──────────────┐ ┌──────────────┐                              │
-│  │   Encrypted  │ │    Image     │                              │
-│  │   SQLite DB  │ │  Processor   │                              │
-│  │  (Vectors)   │ │   (Blur)     │                              │
-│  └──────────────┘ └──────────────┘                              │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    CV Module (Person 1)                          │
-│              face_recognition / dlib / MTCNN                     │
-│         Provides: detect_faces() → [(x,y,w,h,encoding)]          │
-└─────────────────────────────────────────────────────────────────┘
-```
+---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Windows)
 
-### Prerequisites
+### Step 1: Install Visual Studio Build Tools
 
-- Python 3.9+
-- CMake (for dlib compilation)
+dlib requires C++ compilation. Download and install:
 
-### Installation
+**Visual Studio Build Tools**: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
-```bash
-# Clone and navigate
-cd privacy-engine
+During installation, select:
+- ✅ "Desktop development with C++"
+- ✅ "MSVC v143 - VS 2022 C++ x64/x86 build tools"
+- ✅ "Windows 10/11 SDK"
 
-# Create virtual environment
+### Step 2: Install Python (if needed)
+
+Download Python 3.11: https://www.python.org/downloads/
+
+**Important**: Check ✅ "Add Python to PATH" during installation!
+
+### Step 3: Install Dependencies
+
+```powershell
+# Navigate to server folder
+cd E:\face-obscurer\server
+
+# Create virtual environment (recommended)
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+.\venv\Scripts\Activate
 
-# Install dependencies
+# Install cmake first
+pip install cmake
+
+# Install all dependencies (dlib takes ~5-10 minutes to compile)
 pip install -r requirements.txt
+```
+
+### Step 4: Run the Server
+
+```powershell
+# Make sure venv is activated
+.\venv\Scripts\Activate
 
 # Run the server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --port 8000
 ```
 
-### API Documentation
+The API is now running at **http://localhost:8000**
 
-Once running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+### Step 5: Test It
+
+Open http://localhost:8000/docs in your browser to see the Swagger UI.
+
+---
+
+## 📁 Project Structure
+
+```
+server/
+├── app/
+│   ├── main.py           # FastAPI application
+│   ├── face_utils.py     # dlib face detection (128-dim encodings)
+│   ├── database.py       # SQLite + encryption
+│   ├── image_processor.py # Blur/pixelate engine
+│   └── models.py         # Pydantic schemas
+├── known_faces/          # Shared with camera scanner!
+│   ├── alice.jpg
+│   ├── bob.heic
+│   └── ...
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## 🔗 Sharing Faces with Camera Scanner
+
+Both systems can share the `known_faces/` directory:
+
+```
+server/
+├── known_faces/      ← Put photos here
+│   ├── alice.jpg     ← Filename = label
+│   ├── bob.heic
+│   └── charlie.png
+├── camera_face_scanner.py   ← Person 1's code (reads from known_faces/)
+└── app/                     ← API code (can sync from known_faces/)
+```
+
+### Sync known_faces to database:
+
+```bash
+curl -X POST http://localhost:8000/sync-known-faces
+```
+
+This enrolls all faces from `known_faces/` into the database.
+
+---
 
 ## 📡 API Endpoints
 
-### Enrollment (Opt-Out)
+### Enroll a User
 
 ```bash
-# Enroll a user
-curl -X POST "http://localhost:8000/enroll" \
+curl -X POST http://localhost:8000/enroll \
   -F "photo=@face.jpg" \
   -F "alias=John Doe"
 ```
 
-**Response:**
-```json
-{
-  "status": "success",
-  "message": "User enrolled successfully...",
-  "user_id": "usr_abc123def456",
-  "created_at": "2024-01-15T10:30:00Z"
-}
-```
-
-### Process Image
+### Process an Image
 
 ```bash
-# Process a group photo
-curl -X POST "http://localhost:8000/process" \
+curl -X POST http://localhost:8000/process \
   -F "image=@group_photo.jpg" \
   -F "censor_method=blur" \
+  -F "distance_metric=euclidean" \
   -F "threshold=0.6"
 ```
 
-**Response:**
-```json
-{
-  "status": "success",
-  "faces_detected": 5,
-  "faces_redacted": 2,
-  "matched_users": ["usr_abc123", "usr_def456"],
-  "processed_image": "data:image/jpeg;base64,...",
-  "image_format": "jpeg",
-  "processing_time_ms": 234.5
-}
+### List Enrolled Users
+
+```bash
+curl http://localhost:8000/users
 ```
 
-### Censorship Methods
+---
+
+## 🎛️ Distance Metrics
+
+| Metric | Default Threshold | Description |
+|--------|------------------|-------------|
+| `euclidean` | 0.6 | dlib default, standard L2 distance |
+| `manhattan` | 6.0 | L1 distance, robust to outliers |
+| `cosine` | 0.4 | Angular similarity |
+
+Person 1's camera scanner uses `euclidean` with tolerance `0.4` (stricter).
+
+---
+
+## 🎨 Censorship Methods
 
 | Method | Description |
 |--------|-------------|
-| `blur` | Gaussian blur (default, most natural) |
-| `pixelate` | Mosaic/pixelation effect |
+| `blur` | Gaussian blur (default) |
+| `pixelate` | Mosaic effect |
 | `black_bar` | Solid black rectangle |
-| `emoji` | Fun emoji overlay 😶 |
+| `emoji` | 😶 overlay |
 
-## 🔐 Privacy Features
+---
 
-### Zero-Knowledge Design
-
-1. **No Photo Storage**: Original enrollment photos are processed in memory and immediately discarded
-2. **Encrypted Vectors**: Face encodings are encrypted at rest using Fernet symmetric encryption
-3. **Audit Logging**: Track processing events without storing images
-
-### Database Schema
-
-```
-┌─────────────────────────────────────────┐
-│            optout_users                  │
-├─────────────────────────────────────────┤
-│ id          │ VARCHAR (PK)              │
-│ alias       │ VARCHAR (nullable)        │
-│ face_encoding│ BLOB (encrypted)         │
-│ created_at  │ DATETIME                  │
-│ is_active   │ BOOLEAN                   │
-└─────────────────────────────────────────┘
-```
-
-## 🔗 Integration with Team
-
-### For Person 1 (CV Specialist)
-
-Implement this interface in `face_utils.py`:
-
-```python
-class FaceDetectorInterface:
-    def detect_faces(self, image_bytes: bytes) -> List[DetectedFace]:
-        """Return list of DetectedFace with x, y, width, height, encoding"""
-        pass
-    
-    def generate_encoding(self, image_bytes: bytes) -> Optional[np.ndarray]:
-        """Return 128-dim encoding for single face"""
-        pass
-```
-
-### For Person 3 (Frontend)
-
-**JavaScript fetch example:**
+## 🔧 Frontend Integration (React)
 
 ```javascript
 // Enroll user
@@ -183,90 +174,95 @@ const enrollUser = async (photoFile, alias) => {
   
   const response = await fetch('http://localhost:8000/enroll', {
     method: 'POST',
-    body: formData
+    body: formData,
   });
   
   return response.json();
 };
 
 // Process image
-const processImage = async (imageFile, method = 'blur') => {
+const processImage = async (imageFile) => {
   const formData = new FormData();
   formData.append('image', imageFile);
-  formData.append('censor_method', method);
+  formData.append('censor_method', 'blur');
+  formData.append('distance_metric', 'euclidean');
+  formData.append('threshold', '0.5');
   
   const response = await fetch('http://localhost:8000/process', {
     method: 'POST',
-    body: formData
+    body: formData,
   });
   
   const data = await response.json();
-  // data.processed_image is a base64 data URL
+  // data.processed_image is base64 data URL
   return data;
 };
 ```
 
-## 🧪 Testing
+---
 
+## ⚠️ Troubleshooting
+
+### "pip is not recognized"
+```powershell
+python -m pip install -r requirements.txt
+```
+
+### dlib fails to compile
+1. Install Visual Studio Build Tools (see Step 1)
+2. Restart PowerShell
+3. Try again
+
+### "No module named face_recognition"
+```powershell
+pip install cmake
+pip install dlib
+pip install face_recognition
+```
+
+### Camera scanner doesn't recognize API-enrolled faces
+Make sure both use the same database OR sync via `known_faces/`:
 ```bash
-# Run tests
-pytest tests/ -v
-
-# Test with mock detector (no face_recognition required)
-MOCK_DETECTOR=true pytest tests/ -v
+curl -X POST http://localhost:8000/sync-known-faces
 ```
 
-## 📁 Project Structure
+---
 
-```
-privacy-engine/
-├── app/
-│   ├── __init__.py
-│   ├── main.py           # FastAPI application
-│   ├── database.py       # SQLite + encryption
-│   ├── face_utils.py     # Comparison logic
-│   ├── image_processor.py # Blur/pixelate engine
-│   └── models.py         # Pydantic schemas
-├── tests/
-│   └── test_api.py
-├── requirements.txt
-├── docker-compose.yml
-└── README.md
+## 🏃 Running Both Systems
+
+Terminal 1 - API:
+```powershell
+cd server
+.\venv\Scripts\Activate
+uvicorn app.main:app --reload --port 8000
 ```
 
-## 🐳 Docker Deployment
-
-```bash
-docker-compose up -d
+Terminal 2 - Camera Scanner:
+```powershell
+cd server
+.\venv\Scripts\Activate
+python camera_face_scanner.py --device 0
 ```
 
-## 🏆 Hackathon Features
+Both will recognize the same faces!
 
-- [x] Core enrollment and processing
-- [x] Multiple censorship methods
-- [x] Encrypted vector storage
-- [x] Batch processing endpoint
-- [ ] Video frame processing
-- [ ] Stable Diffusion "invisible" mode
-- [ ] Real-time WebSocket streaming
+---
 
 ## 📊 Performance
 
-| Operation | Time (avg) |
-|-----------|------------|
-| Face encoding | ~100ms |
-| Single comparison | ~0.1ms |
+| Operation | Time |
+|-----------|------|
+| Face encoding (dlib) | ~200ms |
+| Face comparison | ~0.1ms per face |
 | Image blur | ~50ms |
-| Full pipeline (5 faces) | ~300ms |
+| Full pipeline (5 faces) | ~500ms |
 
-## 🤝 Contributing
+---
 
-This is a hackathon project. Each team member owns their domain:
+## 🤝 Team Integration
 
-- **Person 1**: `face_utils.py` detection implementation
-- **Person 2**: Everything else in `/app`
-- **Person 3**: Frontend (separate repo)
+- **Person 1 (CV)**: Camera scanner + known_faces management
+- **Person 2 (Backend)**: This API
+- **Person 3 (Frontend)**: React dashboard calling the API
 
-## 📜 License
-
-MIT License - Built for [Hackathon Name] 2024
+All using compatible 128-dim dlib encodings!
